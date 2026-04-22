@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<title>雨夜城市｜人格叙事系统</title>
+
+<style>
+
+body{
+  margin:0;
+  background:#05060a;
+  color:#eaeaea;
+  font-family:Arial;
+  overflow:hidden;
+  transition:2s;
+}
+
+.bg{
+  position:fixed;
+  width:100%;
+  height:100%;
+  background:radial-gradient(circle at center,#1a1a2e,#000);
+  z-index:-3;
+}
+
+.rain{
+  position:fixed;
+  width:100%;
+  height:100%;
+  background:url("https://i.imgur.com/4M7IWwP.gif");
+  opacity:0.08;
+  z-index:-2;
+  pointer-events:none;
+}
+
+.card{
+  width:720px;
+  margin:6% auto;
+  padding:40px;
+  background:rgba(20,20,30,0.6);
+  border:1px solid rgba(255,255,255,0.08);
+  border-radius:14px;
+  backdrop-filter:blur(10px);
+}
+
+.text{
+  min-height:90px;
+  font-size:18px;
+  line-height:1.8;
+  margin-top:20px;
+}
+
+.option{
+  margin-top:10px;
+  padding:12px;
+  border:1px solid rgba(255,255,255,0.15);
+  border-radius:8px;
+  cursor:pointer;
+  opacity:0;
+  transform:translateY(10px);
+  animation:fadeIn 0.4s forwards;
+}
+
+.option:hover{
+  background:rgba(255,255,255,0.05);
+}
+
+@keyframes fadeIn{
+  to{opacity:1;transform:translateY(0);}
+}
+
+button{
+  margin-top:15px;
+  padding:8px 12px;
+  background:transparent;
+  border:1px solid rgba(255,255,255,0.2);
+  color:#fff;
+  cursor:pointer;
+}
+
+canvas{
+  margin-top:20px;
+}
+
+pre{
+  white-space:pre-wrap;
+  line-height:1.6;
+  margin-top:20px;
+}
+
+.fade-out{
+  opacity:0;
+  filter:blur(8px) brightness(0.3);
+  transition:2s;
+}
+
+.fade-in{
+  opacity:1;
+  transition:2s;
+}
+
+</style>
+</head>
+
+<body>
+
+<div class="bg"></div>
+<div class="rain"></div>
+
+<!-- 🎧 音频 -->
+<audio id="rainAudio" loop autoplay>
+<source src="https://cdn.pixabay.com/download/audio/2022/03/15/audio_c8b0f4b6d7.mp3?filename=rain-ambient-110397.mp3">
+</audio>
+
+<audio id="endAudio">
+<source src="https://cdn.pixabay.com/download/audio/2022/03/10/audio_0d1d1b7b9c.mp3?filename=cinematic-hit-110116.mp3">
+</audio>
+
+<div class="card" id="card">
+
+<h2>🎬 雨夜城市</h2>
+<div id="text" class="text"></div>
+<div id="options"></div>
+<div id="nav"></div>
+
+</div>
+
+<script>
+
+///////////////////////
+// 状态系统
+///////////////////////
+let traits = {
+理性:0,
+情绪:0,
+社交:0,
+孤独:0,
+反叛:0,
+秩序:0
+};
+
+let index = 0;
+let history = [];
+
+///////////////////////
+// 剧情
+///////////////////////
+const scenes = [
+{
+text:"你在雨夜城市醒来。",
+options:[
+{t:"观察环境",k:"理性"},
+{t:"顺着灯光走",k:"情绪"},
+{t:"随意走",k:"反叛"},
+{t:"停在原地",k:"孤独"}
+]
+},
+{
+text:"街道开始重复。",
+options:[
+{t:"记录规律",k:"理性"},
+{t:"忽略继续走",k:"反叛"},
+{t:"感到不安",k:"情绪"},
+{t:"停止思考",k:"孤独"}
+]
+},
+{
+text:"你看见另一个自己。",
+options:[
+{t:"逻辑解释",k:"理性"},
+{t:"情绪波动",k:"情绪"},
+{t:"无视",k:"反叛"},
+{t:"后退观察",k:"孤独"}
+]
+},
+{
+text:"陌生人说：你终于来了。",
+options:[
+{t:"追问身份",k:"理性"},
+{t:"礼貌回应",k:"社交"},
+{t:"感到不适",k:"情绪"},
+{t:"离开",k:"孤独"}
+]
+},
+{
+text:"城市开始崩塌。",
+options:[
+{t:"分析结构",k:"理性"},
+{t:"接受变化",k:"情绪"},
+{t:"控制",k:"秩序"},
+{t:"逃离",k:"反叛"}
+]
+},
+{
+text:"你站在桥上。",
+options:[
+{t:"寻找真相",k:"理性"},
+{t:"接受一切",k:"情绪"},
+{t:"离开系统",k:"反叛"},
+{t:"沉默",k:"孤独"}
+]
+}
+];
+
+///////////////////////
+// 渲染
+///////////////////////
+function render(){
+
+let s = scenes[index];
+
+document.getElementById("text").innerHTML = s.text;
+
+let html = "";
+
+s.options.forEach((o,i)=>{
+html += `<div class="option"
+style="animation-delay:${i*0.1}s"
+onclick="choose('${o.k}')">${o.t}</div>`;
+});
+
+document.getElementById("options").innerHTML = html;
+
+renderNav();
+}
+
+///////////////////////
+// 导航（第一页无返回）
+///////////////////////
+function renderNav(){
+document.getElementById("nav").innerHTML =
+index>0 ? `<button onclick="back()">⬅ 返回</button>` : "";
+}
+
+///////////////////////
+// 选择
+///////////////////////
+function choose(k){
+
+history.push({
+index,
+traits:JSON.parse(JSON.stringify(traits))
+});
+
+traits[k] = (traits[k]||0)+2;
+
+index++;
+
+if(index>=scenes.length){
+return result();
+}
+
+render();
+}
+
+///////////////////////
+// 返回
+///////////////////////
+function back(){
+let last = history.pop();
+if(!last)return;
+index=last.index;
+traits=last.traits;
+render();
+}
+
+///////////////////////
+// 角色匹配
+///////////////////////
+const characters=[
+{name:"孙悟空",t:{理性:6,情绪:7,社交:5,孤独:4,反叛:10,秩序:1}},
+{name:"哪吒",t:{理性:5,情绪:9,社交:4,孤独:5,反叛:9,秩序:2}},
+{name:"魏无羡",t:{理性:6,情绪:8,社交:7,孤独:5,反叛:8,秩序:3}},
+{name:"路飞",t:{理性:5,情绪:9,社交:8,孤独:4,反叛:10,秩序:2}},
+{name:"林黛玉",t:{理性:4,情绪:10,社交:3,孤独:8,反叛:3,秩序:5}},
+{name:"赫敏",t:{理性:9,情绪:6,社交:6,孤独:4,反叛:4,秩序:8}},
+{name:"张起灵",t:{理性:7,情绪:3,社交:2,孤独:10,反叛:3,秩序:7}}
+];
+
+function match(){
+let list=[];
+characters.forEach(c=>{
+let d=0;
+for(let k in traits){
+d+=Math.abs(traits[k]-c.t[k]);
+}
+list.push({name:c.name,d});
+});
+list.sort((a,b)=>a.d-b.d);
+return list;
+}
+
+///////////////////////
+// 类型
+///////////////////////
+function getType(t){
+if(t.孤独>=8&&t.理性>=6)return"逆流观察型人格";
+if(t.反叛>=8)return"边界突破型人格";
+if(t.情绪>=8)return"情绪驱动型人格";
+if(t.理性>=8)return"结构理性型人格";
+return"动态平衡型人格";
+}
+
+///////////////////////
+// AI报告
+///////////////////////
+function aiReport(t){
+return `你属于「${getType(t)}」。
+
+你的核心特征不是选择，而是感知差异。
+
+你更倾向后退一步观察世界，而不是立刻进入行动。
+
+理性与情绪在你身上并不冲突，
+它们是交替使用的两种认知方式。
+
+你不追求被理解，
+但你在寻找一种无需解释的存在方式。`;
+}
+
+///////////////////////
+// 雷达图
+///////////////////////
+function radar(t){
+
+let c=document.createElement("canvas");
+c.width=320;c.height=320;
+let ctx=c.getContext("2d");
+
+let keys=["理性","情绪","社交","孤独","反叛","秩序"];
+let cx=160,cy=160,r=100,step=Math.PI*2/keys.length;
+
+ctx.strokeStyle="rgba(255,255,255,0.1)";
+for(let i=1;i<=5;i++){
+ctx.beginPath();
+for(let j=0;j<=keys.length;j++){
+let a=j*step;
+let rr=r*i/5;
+let x=cx+Math.cos(a)*rr;
+let y=cy+Math.sin(a)*rr;
+if(j==0)ctx.moveTo(x,y);
+else ctx.lineTo(x,y);
+}
+ctx.closePath();
+ctx.stroke();
+}
+
+ctx.strokeStyle="rgba(0,255,200,0.8)";
+ctx.fillStyle="rgba(0,255,200,0.2)";
+ctx.beginPath();
+
+keys.forEach((k,i)=>{
+let a=i*step;
+let v=(t[k]||0)/10;
+let x=cx+Math.cos(a)*r*v;
+let y=cy+Math.sin(a)*r*v;
+if(i==0)ctx.moveTo(x,y);
+else ctx.lineTo(x,y);
+});
+
+ctx.closePath();
+ctx.fill();
+ctx.stroke();
+
+return c;
+}
+
+///////////////////////
+// 🎬 结局动画（核心）
+///////////////////////
+function result(){
+
+document.body.classList.add("fade-out");
+
+document.getElementById("endAudio").play();
+document.getElementById("rainAudio").volume=0.2;
+
+setTimeout(()=>{
+
+let r=match();
+let type=getType(traits);
+
+document.getElementById("card").innerHTML="";
+
+let title=document.createElement("h2");
+title.innerText="🎬 电影结局卡片";
+
+let role=document.createElement("p");
+role.innerText="主角色："+r[0].name;
+
+let typeEl=document.createElement("p");
+typeEl.innerText="人格类型："+type;
+
+let canvas=radar(traits);
+
+let report=document.createElement("pre");
+report.innerText=aiReport(traits);
+
+let card=document.getElementById("card");
+
+card.appendChild(title);
+card.appendChild(role);
+card.appendChild(typeEl);
+card.appendChild(canvas);
+card.appendChild(report);
+
+document.body.classList.remove("fade-out");
+document.body.classList.add("fade-in");
+
+},1500);
+
+}
+
+render();
+
+</script>
+
+</body>
+</html>
